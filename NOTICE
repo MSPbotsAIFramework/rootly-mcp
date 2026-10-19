@@ -1,0 +1,9 @@
+Rootly MCP Server
+Copyright 2026 MSPbots.ai
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+"Rootly" is a trademark of its respective owner. This project is an
+independent integration that calls the documented Rootly REST API; it
+contains no Rootly source code and is not affiliated with or endorsed by
+Rootly.
