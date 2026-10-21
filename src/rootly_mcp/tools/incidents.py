@@ -28,6 +28,7 @@ from ._common import (
     Page,
     body,
     compact,
+    enum_value,
     list_page,
     resource_id,
     run_tool,
@@ -92,14 +93,14 @@ def register(mcp: FastMCP, client_factory: ClientFactory) -> None:
         incident_id: IncidentId,
         title: Annotated[str | None, Field(description="New title.")] = None,
         summary: Annotated[str | None, Field(description="New summary.")] = None,
-        status: Annotated[Status | None, Field(description="New status.")] = None,
+        status: Annotated[Status | str | None, Field(description="New status.")] = None,
         severity_id: Annotated[str | None, Field(description="New severity id.")] = None,
     ) -> str:
         """Change an incident's title, summary, status or severity. Only when the user explicitly asks."""
 
         async def action(client: RootlyClient) -> Any:
             iid = resource_id(incident_id, "incident_id")
-            attributes = compact({"title": title, "summary": summary, "status": status, "severity_id": severity_id})
+            attributes = compact({"title": title, "summary": summary, "status": enum_value(status, Status), "severity_id": severity_id})
             if not attributes:
                 raise ValueError("Nothing to update: pass at least one field to change.")
             return single(await client.request("PUT", f"incidents/{iid}", body=body("incidents", attributes, iid)))

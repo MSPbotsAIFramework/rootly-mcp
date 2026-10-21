@@ -253,3 +253,27 @@ async def test_severities_and_current_user(monkeypatch):
     assert user["email"] == "jane@example.com"
     status = await _call(monkeypatch, rec, "rootly_status", {})
     assert status["connected"] is True and status["user"]["name"] == "Jane"
+
+
+# ---- compatibility: enum params accept any casing (normalized) and unknown values (passed through)
+
+
+async def test_alert_update_status_any_case_uses_action_endpoint(monkeypatch):
+    rec = Recorder({"POST alerts/al-1/acknowledge": ALERT})
+    await _call(monkeypatch, rec, "rootly_alerts_update", {"alert_id": "al-1", "status": "Acknowledged"})
+    assert len(rec.calls("alerts/al-1/acknowledge", "POST")) == 1
+    assert not rec.calls("alerts/al-1", "PATCH")
+
+
+async def test_alert_update_unknown_status_passed_through(monkeypatch):
+    rec = Recorder({"PATCH alerts/al-1": ALERT})
+    await _call(monkeypatch, rec, "rootly_alerts_update", {"alert_id": "al-1", "status": "snoozed"})
+    assert body(rec.calls("alerts/al-1", "PATCH")[0])["data"]["attributes"] == {"status": "snoozed"}
+    assert not rec.calls("alerts/al-1/acknowledge", "POST") and not rec.calls("alerts/al-1/resolve", "POST")
+
+
+@pytest.mark.parametrize("given,sent", [("MITIGATED", "mitigated"), ("In_Triage", "in_triage"), ("paused", "paused")])
+async def test_incident_update_status_normalized_or_passed_through(monkeypatch, given, sent):
+    rec = Recorder({f"PUT incidents/{INC}": INCIDENT})
+    await _call(monkeypatch, rec, "rootly_incidents_update", {"incident_id": INC, "status": given})
+    assert body(rec.calls(f"incidents/{INC}", "PUT")[0])["data"]["attributes"] == {"status": sent}

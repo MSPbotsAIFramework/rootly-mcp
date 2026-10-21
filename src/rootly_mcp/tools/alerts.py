@@ -28,6 +28,7 @@ from ._common import (
     Page,
     body,
     compact,
+    enum_value,
     list_page,
     resource_id,
     run_tool,
@@ -35,6 +36,7 @@ from ._common import (
 )
 
 AlertId = Annotated[str, Field(description="Rootly alert id.", min_length=1)]
+AlertStatus = Literal["acknowledged", "resolved"]
 
 
 async def acknowledge(client: RootlyClient, aid: str) -> Any:
@@ -101,7 +103,7 @@ def register(mcp: FastMCP, client_factory: ClientFactory) -> None:
     @mcp.tool(annotations=WRITES)
     async def rootly_alerts_update(
         alert_id: AlertId,
-        status: Annotated[Literal["acknowledged", "resolved"] | None, Field(description="acknowledged or resolved.")] = None,
+        status: Annotated[AlertStatus | str | None, Field(description="acknowledged or resolved.")] = None,
         summary: Annotated[str | None, Field(description="New summary.")] = None,
     ) -> str:
         """Change an alert's summary, or move it to acknowledged / resolved.
@@ -111,15 +113,19 @@ def register(mcp: FastMCP, client_factory: ClientFactory) -> None:
 
         async def action(client: RootlyClient) -> dict:
             aid = resource_id(alert_id, "alert_id")
-            if status is None and not (summary and summary.strip()):
+            new_status = enum_value(status, AlertStatus)
+            if new_status is None and not (summary and summary.strip()):
                 raise ValueError("Nothing to update: pass status and / or summary.")
             result: dict[str, Any] = {"alert_id": aid}
-            if summary and summary.strip():
-                result["alert"] = single(await client.request("PATCH", f"alerts/{aid}", body=body("alerts", {"summary": summary.strip()}, aid)))
-            # Status changes have their own endpoints; the update endpoint does not take a status.
-            if status == "acknowledged":
+            # acknowledged / resolved have their own endpoints; any other status goes to the API as given.
+            attributes = compact({"summary": (summary or "").strip() or None})
+            if new_status is not None and new_status not in ("acknowledged", "resolved"):
+                attributes["status"] = new_status
+            if attributes:
+                result["alert"] = single(await client.request("PATCH", f"alerts/{aid}", body=body("alerts", attributes, aid)))
+            if new_status == "acknowledged":
                 result["alert"] = await acknowledge(client, aid)
-            elif status == "resolved":
+            elif new_status == "resolved":
                 result["alert"] = await resolve(client, aid)
             return result
 
