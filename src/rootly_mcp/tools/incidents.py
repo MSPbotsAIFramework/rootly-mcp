@@ -25,6 +25,7 @@ from ._common import (
     WRITES_IDEMPOTENT,
     ClientFactory,
     Limit,
+    Offset,
     Page,
     body,
     compact,
@@ -46,12 +47,13 @@ def register(mcp: FastMCP, client_factory: ClientFactory) -> None:
         severity: Annotated[str | None, Field(description="Severity slug, e.g. sev1 (see rootly_org_severities_list).")] = None,
         limit: Limit = None,
         page: Page = None,
+        offset: Offset = None,
     ) -> str:
         """List incidents, newest first, optionally by status or severity."""
 
         async def action(client: RootlyClient) -> dict:
             params = compact({"filter[status]": (status or "").strip() or None, "filter[severity]": (severity or "").strip() or None, "sort": "-created_at"})
-            return await list_page(client, "incidents", "incidents", params, limit, page)
+            return await list_page(client, "incidents", "incidents", params, limit, page, offset, by_offset=True)
 
         return await run_tool("rootly_incidents_list", client_factory, action)
 

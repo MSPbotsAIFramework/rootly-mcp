@@ -41,6 +41,11 @@ _ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 Limit = Annotated[int | None, Field(description="Results per page (1-100, default 25).", ge=1, le=100)]
 Page = Annotated[int | None, Field(description="Page number, from 1.", ge=1)]
+Offset = Annotated[
+    int | None,
+    Field(description="Record position to start from (0-based, overrides page); pass next_offset from the previous result.", ge=0),
+]
+DEFAULT_LIMIT = 25
 
 
 def compact(values: dict[str, Any]) -> dict[str, Any]:
@@ -74,10 +79,40 @@ def single(payload: Any) -> Any:
     return flatten(payload.get("data")) if isinstance(payload, dict) and "data" in payload else payload
 
 
-async def list_page(client: RootlyClient, path: str, key: str, params: dict[str, Any], limit: int | None, page: int | None) -> dict:
-    size, number = limit or 25, page or 1
+def locate(offset: int | None, page: int | None, limit: int | None) -> tuple[int, int, int]:
+    """(page number, page size, start) for a read from record ``start``.
+
+    Rootly pages by number only, so a position is reached by asking for the page that holds it
+    (same page size) and skipping the records before it.
+    """
+    size = limit or DEFAULT_LIMIT
+    start = offset if offset is not None else ((page or 1) - 1) * size
+    return start // size + 1, size, start
+
+
+async def list_page(
+    client: RootlyClient,
+    path: str,
+    key: str,
+    params: dict[str, Any],
+    limit: int | None,
+    page: int | None,
+    offset: int | None = None,
+    *,
+    by_offset: bool = False,
+) -> dict:
+    """One page of a list as {<key>, count, total, page, total_pages, has_more}.
+
+    With ``by_offset`` (tools that take ``offset``) the items start at record ``start`` of the
+    page and the result adds ``offset`` and ``next_offset``, which continues right after the last
+    record returned, also when the result is cut to fit the size limit (a page number cannot:
+    the rest of a cut page is on no other page).
+    """
+    number, size, start = locate(offset, page, limit)
     payload = await client.get(path, compact({**params, "page[size]": size, "page[number]": number})) or {}
     items = [flatten(r) for r in payload.get("data") or []] if isinstance(payload, dict) else []
+    if by_offset:
+        items = items[start - (number - 1) * size :]
     meta = payload.get("meta") if isinstance(payload, dict) and isinstance(payload.get("meta"), dict) else {}
     links = payload.get("links") if isinstance(payload, dict) and isinstance(payload.get("links"), dict) else {}
     total_pages = meta.get("total_pages")
@@ -90,6 +125,11 @@ async def list_page(client: RootlyClient, path: str, key: str, params: dict[str,
             "page": number,
             "total_pages": total_pages,
             "has_more": more,
+            **(
+                {"offset": start, "next_offset": start + len(items) if more else None, "_resume": {"key": "next_offset", "start": start}}
+                if by_offset
+                else {}
+            ),
         }
     )
 

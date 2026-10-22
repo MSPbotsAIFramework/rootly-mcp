@@ -34,7 +34,10 @@ A request to `/mcp` without the header gets HTTP 401 naming it.
 All tools return a JSON string. JSON:API resources are flattened to `{id, type, ...attributes}`
 with related ids as `<relationship>_id` / `<relationship>_ids`. List tools take `limit`
 (default 25, at most 100) and `page` and return `{items, count, total, page, total_pages,
-has_more}` under the resource name.
+has_more}` under the resource name. The incidents, alerts, schedules and teams lists also take
+`offset` (record position, overriding `page`) and return `offset` / `next_offset`: when a page is
+too large for the response size limit and is cut, `next_offset` continues right after the last
+record returned, which `page` cannot (the rest of a cut page is on no other page).
 
 | Tool | Purpose | Parameters (required in **bold**) |
 |---|---|---|

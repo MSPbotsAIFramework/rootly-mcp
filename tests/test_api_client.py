@@ -277,3 +277,125 @@ async def test_incident_update_status_normalized_or_passed_through(monkeypatch, 
     rec = Recorder({f"PUT incidents/{INC}": INCIDENT})
     await _call(monkeypatch, rec, "rootly_incidents_update", {"incident_id": INC, "status": given})
     assert body(rec.calls(f"incidents/{INC}", "PUT")[0])["data"]["attributes"] == {"status": sent}
+
+
+# ---- Page-number paging that survives truncation ----------------------------
+# Rootly pages by page[number] + page[size] only. offset reads the page that holds a record
+# position and next_offset continues right after the last record returned, also when a page is
+# cut to fit the response size limit (the rest of a cut page is on no other page).
+
+TOTAL = 130
+# Many short fields: shortening long values cannot make 25 such records fit 20,000 characters.
+BIG = {f"field{k}": "z" * 60 for k in range(30)}
+
+PAGED_TOOLS = [
+    ("rootly_incidents_list", "incidents", "incidents"),
+    ("rootly_alerts_list", "alerts", "alerts"),
+    ("rootly_schedules_list", "schedules", "schedules"),
+    ("rootly_org_teams_list", "teams", "teams"),
+]
+
+
+def _paged_api(big=True):
+    """Fake JSON:API list paging TOTAL records by page[number] (from 1) and page[size] like Rootly."""
+    records = [{"id": str(n), "type": "things", "attributes": {"n": n, **(BIG if big else {})}} for n in range(TOTAL)]
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        number = int(request.url.params.get("page[number]", 1))
+        size = int(request.url.params.get("page[size]", 20))
+        pages = max((TOTAL + size - 1) // size, 1)
+        links = {"next": f"https://api.rootly.com/v1/x?page[number]={number + 1}"} if number < pages else {"next": None}
+        return httpx.Response(
+            200,
+            json={
+                "data": records[(number - 1) * size : number * size],
+                "meta": {"current_page": number, "total_count": TOTAL, "total_pages": pages},
+                "links": links,
+            },
+        )
+
+    return reply
+
+
+async def _walk(monkeypatch, tool, path, key, args):
+    rec = Recorder({path: _paged_api()})
+    seen, calls = [], 0
+    result = await _call(monkeypatch, rec, tool, args)
+    while True:
+        calls += 1
+        assert calls < 100
+        seen += [r["n"] for r in result[key]]
+        if "next_offset" in result:
+            assert "retry_page_size" not in result
+        else:
+            assert result["has_more"] is False
+            return seen, calls
+        rest = {k: v for k, v in args.items() if k != "page"}
+        result = await _call(monkeypatch, rec, tool, {**rest, "offset": result["next_offset"]})
+
+
+@pytest.mark.parametrize("tool,path,key", PAGED_TOOLS)
+async def test_cut_pages_walked_by_next_offset_return_every_record_once(monkeypatch, tool, path, key):
+    seen, calls = await _walk(monkeypatch, tool, path, key, {"limit": 25})
+    assert seen == list(range(TOTAL))
+    assert calls > TOTAL // 25 + 1  # pages really were cut
+
+
+@pytest.mark.parametrize("tool,path,key", PAGED_TOOLS)
+async def test_cut_pages_walked_from_a_later_page(monkeypatch, tool, path, key):
+    seen, _ = await _walk(monkeypatch, tool, path, key, {"page": 3, "limit": 25})
+    assert seen == list(range(50, TOTAL))
+
+
+@pytest.mark.parametrize("tool,path,key", PAGED_TOOLS)
+@pytest.mark.parametrize("offset,page,ids", [(30, 2, range(30, 50)), (25, 2, range(25, 50)), (0, 1, range(25))])
+async def test_offset_reads_the_page_that_holds_it(monkeypatch, tool, path, key, offset, page, ids):
+    rec = Recorder({path: _paged_api(big=False)})
+    result = await _call(monkeypatch, rec, tool, {"limit": 25, "offset": offset})
+    params = rec.requests[0].url.params
+    assert (params["page[number]"], params["page[size]"]) == (str(page), "25")
+    assert [r["n"] for r in result[key]] == list(ids)
+    assert result["offset"] == offset and result["next_offset"] == page * 25 and result["page"] == page
+
+
+@pytest.mark.parametrize("tool,path,key", PAGED_TOOLS)
+async def test_offset_past_the_end(monkeypatch, tool, path, key):
+    rec = Recorder({path: _paged_api(big=False)})
+    result = await _call(monkeypatch, rec, tool, {"limit": 25, "offset": 1000})
+    assert result[key] == [] and result["has_more"] is False and "next_offset" not in result
+
+
+@pytest.mark.parametrize("tool,path,key", PAGED_TOOLS)
+async def test_offset_wins_over_page(monkeypatch, tool, path, key):
+    rec = Recorder({path: _paged_api(big=False)})
+    result = await _call(monkeypatch, rec, tool, {"page": 1, "limit": 25, "offset": 60})
+    assert rec.requests[0].url.params["page[number]"] == "3"
+    assert [r["n"] for r in result[key]] == list(range(60, 75))
+
+
+@pytest.mark.parametrize(
+    "tool,path,key,extra",
+    [
+        ("rootly_incidents_list", "incidents", "incidents", {"sort": "-created_at"}),
+        ("rootly_alerts_list", "alerts", "alerts", {}),
+        ("rootly_schedules_list", "schedules", "schedules", {}),
+        ("rootly_org_teams_list", "teams", "teams", {"sort": "name"}),
+    ],
+)
+@pytest.mark.parametrize(
+    "paging,sent",
+    [({"page": 2, "limit": 25}, {"page[number]": "2", "page[size]": "25"}), ({}, {"page[number]": "1", "page[size]": "25"})],
+)
+async def test_page_only_call_sends_the_same_request(monkeypatch, tool, path, key, extra, paging, sent):
+    rec = Recorder({path: _paged_api(big=False)})
+    result = await _call(monkeypatch, rec, tool, paging)
+    assert dict(rec.requests[0].url.params) == {**extra, **sent}
+    first = (paging.get("page", 1) - 1) * 25
+    assert [r["n"] for r in result[key]] == list(range(first, first + 25))
+    assert result["page"] == paging.get("page", 1) and result["has_more"] is True
+
+
+async def test_severities_list_has_no_offset_fields(monkeypatch):
+    rec = Recorder({"severities": _paged_api(big=False)})
+    result = await _call(monkeypatch, rec, "rootly_org_severities_list", {})
+    assert "offset" not in result and "next_offset" not in result

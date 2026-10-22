@@ -26,6 +26,7 @@ from ._common import (
     WRITES_IDEMPOTENT,
     ClientFactory,
     Limit,
+    Offset,
     Page,
     body,
     compact,
@@ -53,11 +54,11 @@ def _team_attributes(name: str | None, description: str | None, color: str | Non
 
 def register(mcp: FastMCP, client_factory: ClientFactory) -> None:
     @mcp.tool(annotations=READ_ONLY)
-    async def rootly_org_teams_list(limit: Limit = None, page: Page = None) -> str:
+    async def rootly_org_teams_list(limit: Limit = None, page: Page = None, offset: Offset = None) -> str:
         """List teams with name, slug, description and colour."""
 
         async def action(client: RootlyClient) -> dict:
-            return await list_page(client, "teams", "teams", {"sort": "name"}, limit, page)
+            return await list_page(client, "teams", "teams", {"sort": "name"}, limit, page, offset, by_offset=True)
 
         return await run_tool("rootly_org_teams_list", client_factory, action)
 

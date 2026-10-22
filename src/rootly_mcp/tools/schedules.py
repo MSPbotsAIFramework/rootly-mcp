@@ -19,16 +19,16 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
 from ..api_client import RootlyClient
-from ._common import READ_ONLY, ClientFactory, Limit, Page, list_page, resource_id, run_tool, single
+from ._common import READ_ONLY, ClientFactory, Limit, Offset, Page, list_page, resource_id, run_tool, single
 
 
 def register(mcp: FastMCP, client_factory: ClientFactory) -> None:
     @mcp.tool(annotations=READ_ONLY)
-    async def rootly_schedules_list(limit: Limit = None, page: Page = None) -> str:
+    async def rootly_schedules_list(limit: Limit = None, page: Page = None, offset: Offset = None) -> str:
         """List on-call schedules with name, description, owning team and time zone."""
 
         async def action(client: RootlyClient) -> dict:
-            return await list_page(client, "schedules", "schedules", {}, limit, page)
+            return await list_page(client, "schedules", "schedules", {}, limit, page, offset, by_offset=True)
 
         return await run_tool("rootly_schedules_list", client_factory, action)
 

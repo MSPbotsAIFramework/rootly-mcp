@@ -25,6 +25,7 @@ from ._common import (
     WRITES_IDEMPOTENT,
     ClientFactory,
     Limit,
+    Offset,
     Page,
     body,
     compact,
@@ -54,12 +55,13 @@ def register(mcp: FastMCP, client_factory: ClientFactory) -> None:
         status: Annotated[str | None, Field(description="Status, e.g. triggered, acknowledged, resolved.")] = None,
         limit: Limit = None,
         page: Page = None,
+        offset: Offset = None,
     ) -> str:
         """List alerts with summary, status, source, services and timestamps, optionally by status."""
 
         async def action(client: RootlyClient) -> dict:
             params = compact({"filter[status]": (status or "").strip() or None})
-            return await list_page(client, "alerts", "alerts", params, limit, page)
+            return await list_page(client, "alerts", "alerts", params, limit, page, offset, by_offset=True)
 
         return await run_tool("rootly_alerts_list", client_factory, action)
 
