@@ -1,0 +1,165 @@
+[
+  {
+    "id": "TC1",
+    "ac": "AC1",
+    "text": "Given the server is running, When a client calls tools/list, Then the 9 new tools (rootly_postmortems_list/get/update, rootly_action_items_list/get/create/update, rootly_oncalls_list, rootly_schedules_override_create) are listed with their documented required parameters",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_all_tools_listed_without_navigation", "tests/test_tools.py::test_required_params"]
+  },
+  {
+    "id": "TC2",
+    "ac": "AC2",
+    "text": "Given an incident retrospective still in draft status and never opened in Rootly's collaborative editor, When rootly_postmortems_update is called with a new title and content, Then the call succeeds and a following rootly_postmortems_get shows the new values",
+    "type": "manual",
+    "steps": [
+      "Pick a Rootly incident whose post-mortem is draft and has never been opened in the web retrospective editor",
+      "Call rootly_postmortems_update(postmortem_id, title=\"<new title>\", content=\"<p>new content</p>\")",
+      "Call rootly_postmortems_get(postmortem_id)"
+    ],
+    "expect": "update call returns the resource with the new title/content; the following get call shows the same new title/content",
+    "result": "untested",
+    "notes": "needs a real vendor account; not run at design time"
+  },
+  {
+    "id": "TC3",
+    "ac": "AC3",
+    "text": "Given a retrospective already opened in Rootly's collaborative editor, When rootly_postmortems_update is called with new content, Then the tool returns a structured, non-crashing error naming the conflict instead of raising an exception",
+    "type": "manual",
+    "steps": [
+      "Open an incident's retrospective in Rootly's web collaborative editor at least once",
+      "Call rootly_postmortems_update(postmortem_id, content=\"<p>new content</p>\")"
+    ],
+    "expect": "the tool returns a JSON error envelope ({\"error\": {\"code\": ..., \"message\": ..., \"retryable\": ...}}), not a stack trace or empty response",
+    "result": "untested",
+    "notes": "needs a real vendor account; not run at design time"
+  },
+  {
+    "id": "TC4",
+    "ac": "AC4",
+    "text": "Given a post-mortem id that does not exist, When rootly_postmortems_get or rootly_postmortems_update is called, Then the tool returns the existing not_found error envelope",
+    "type": "auto",
+    "tests": ["tests/test_postmortems.py::test_get_nonexistent_returns_not_found", "tests/test_postmortems.py::test_update_nonexistent_returns_not_found"]
+  },
+  {
+    "id": "TC5",
+    "ac": "AC5",
+    "text": "Given an incident id, When rootly_action_items_create is called with a summary, Then Rootly creates the action item under that incident and the tool returns its id and status",
+    "type": "manual",
+    "steps": [
+      "Pick a real Rootly incident id",
+      "Call rootly_action_items_create(incident_id, summary=\"Add a dashboard alert for X\")",
+      "Open the incident in Rootly's UI, or call rootly_action_items_list(incident_id)"
+    ],
+    "expect": "the create call returns an id and status=open; the action item is visible under the incident in Rootly",
+    "result": "untested",
+    "notes": "needs a real vendor account; not run at design time"
+  },
+  {
+    "id": "TC6",
+    "ac": "AC6",
+    "text": "Given action items exist across the org, When rootly_action_items_list is called with no incident_id and a status or priority filter, Then only matching items are returned, paginated like every other list tool (items/count/total/page/has_more, offset/next_offset)",
+    "type": "manual",
+    "steps": [
+      "Ensure the org has action items in more than one status",
+      "Call rootly_action_items_list(status=\"open\")",
+      "Call rootly_action_items_list(priority=\"high\")"
+    ],
+    "expect": "each call returns only action items matching the given filter; the response includes count/total/page/has_more and, if has_more is true, next_offset",
+    "result": "untested",
+    "notes": "needs a real vendor account; the pagination mechanics themselves (offset math, cut-page walking) are covered by TC-paging-auto below, not this manual case"
+  },
+  {
+    "id": "TC-paging-auto-postmortems",
+    "ac": "AC6",
+    "text": "rootly_postmortems_list pagination (offset math, cut-page walking, has_more) matches every other list tool in this server",
+    "type": "auto",
+    "tests": [
+      "tests/test_api_client.py::test_cut_pages_walked_by_next_offset_return_every_record_once",
+      "tests/test_api_client.py::test_cut_pages_walked_from_a_later_page",
+      "tests/test_api_client.py::test_offset_reads_the_page_that_holds_it",
+      "tests/test_api_client.py::test_offset_past_the_end",
+      "tests/test_api_client.py::test_offset_wins_over_page"
+    ]
+  },
+  {
+    "id": "TC-paging-auto-action-items",
+    "ac": "AC6",
+    "text": "rootly_action_items_list (org-wide mode) pagination matches every other list tool in this server",
+    "type": "auto",
+    "tests": [
+      "tests/test_api_client.py::test_cut_pages_walked_by_next_offset_return_every_record_once",
+      "tests/test_api_client.py::test_cut_pages_walked_from_a_later_page",
+      "tests/test_api_client.py::test_offset_reads_the_page_that_holds_it",
+      "tests/test_api_client.py::test_offset_past_the_end",
+      "tests/test_api_client.py::test_offset_wins_over_page"
+    ]
+  },
+  {
+    "id": "TC-action-items-incident-scope",
+    "ac": "AC6",
+    "text": "Given incident_id is passed to rootly_action_items_list together with status/priority/kind, When called, Then the tool raises a clear invalid_argument error instead of silently ignoring the unsupported filter",
+    "type": "auto",
+    "tests": ["tests/test_action_items.py::test_incident_scoped_list_rejects_unsupported_filters"]
+  },
+  {
+    "id": "TC7",
+    "ac": "AC7",
+    "text": "Given an open action item, When rootly_action_items_update is called with status=done, Then Rootly marks it done and the tool returns the updated record",
+    "type": "manual",
+    "steps": [
+      "Pick a real action item with status open",
+      "Call rootly_action_items_update(action_item_id, status=\"done\")",
+      "Call rootly_action_items_get(action_item_id)"
+    ],
+    "expect": "both calls show status=done",
+    "result": "untested",
+    "notes": "needs a real vendor account; not run at design time"
+  },
+  {
+    "id": "TC8",
+    "ac": "AC8",
+    "text": "Given no schedule filter, When rootly_oncalls_list is called, Then it returns who is on call right now, grouped by escalation policy, using the same flattened JSON shape as every other resource",
+    "type": "manual",
+    "steps": [
+      "Identify a schedule with a known current on-call user",
+      "Call rootly_oncalls_list(schedule_id=<that schedule>)"
+    ],
+    "expect": "the known on-call user's id appears in the result, with schedule_id/schedule_name/escalation_policy_* fields flattened the same way other tools flatten JSON:API resources",
+    "result": "untested",
+    "notes": "needs a real vendor account; not run at design time"
+  },
+  {
+    "id": "TC9",
+    "ac": "AC9",
+    "text": "Given a schedule id, a user id and a start/end time, When rootly_schedules_override_create is called, Then Rootly reassigns on-call coverage for that window, and calling it again with the same user and times returns the existing override rather than creating a duplicate",
+    "type": "manual",
+    "steps": [
+      "Call rootly_schedules_override_create(schedule_id, user_id, starts_at, ends_at) for a future window",
+      "Confirm in Rootly's UI (or rootly_oncalls_list during that window) that the user is now on call",
+      "Call rootly_schedules_override_create again with the identical schedule_id/user_id/starts_at/ends_at"
+    ],
+    "expect": "first call creates the override (201) and coverage changes for that window; second identical call returns the same override id (200), not a new one",
+    "result": "untested",
+    "notes": "needs a real vendor account; not run at design time"
+  },
+  {
+    "id": "TC10",
+    "ac": "AC10",
+    "text": "Given a required field is missing or invalid for a write tool added by this ticket, When it is called, Then the existing invalid_argument error envelope is returned, not an unhandled exception",
+    "type": "auto",
+    "tests": [
+      "tests/test_postmortems.py::test_update_with_nothing_to_update_raises_invalid_argument",
+      "tests/test_action_items.py::test_create_without_summary_raises_invalid_argument",
+      "tests/test_action_items.py::test_update_with_nothing_to_update_raises_invalid_argument",
+      "tests/test_schedules.py::test_override_create_missing_required_field_raises_invalid_argument"
+    ]
+  },
+  {
+    "id": "TC11",
+    "ac": "AC11",
+    "text": "Given no X-Rootly-Api-Token header, When any of the 9 new tools is called, Then the gateway middleware returns 401 before the tool body runs",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_tools_list_over_http_returns_every_tool", "tests/test_middleware.py::test_missing_token_returns_401"],
+    "notes": "extend the parametrization/coverage of these two existing tests to include the 9 new tool names, same shape as the existing tools"
+  }
+]
