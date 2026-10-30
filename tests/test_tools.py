@@ -39,6 +39,15 @@ EXPECTED_TOOLS: dict[str, set[str]] = {
     "rootly_alerts_update": {"alert_id"},
     "rootly_schedules_list": set(),
     "rootly_schedules_get": {"schedule_id"},
+    "rootly_oncalls_list": set(),
+    "rootly_schedules_override_create": {"schedule_id", "user_id", "starts_at", "ends_at"},
+    "rootly_postmortems_list": set(),
+    "rootly_postmortems_get": {"postmortem_id"},
+    "rootly_postmortems_update": {"postmortem_id"},
+    "rootly_action_items_list": set(),
+    "rootly_action_items_get": {"action_item_id"},
+    "rootly_action_items_create": {"incident_id", "summary"},
+    "rootly_action_items_update": {"action_item_id"},
     "rootly_org_teams_list": set(),
     "rootly_org_teams_get": {"team_id"},
     "rootly_org_teams_create": {"name"},
@@ -57,6 +66,10 @@ WRITE_TOOLS = {
     "rootly_alerts_resolve",
     "rootly_alerts_create",
     "rootly_alerts_update",
+    "rootly_schedules_override_create",
+    "rootly_postmortems_update",
+    "rootly_action_items_create",
+    "rootly_action_items_update",
     "rootly_org_teams_create",
     "rootly_org_teams_update",
     "rootly_org_teams_patch",
@@ -127,4 +140,21 @@ def test_tool_without_credentials_returns_not_configured():
 
 def test_navigation_tools_need_no_credentials():
     content, _ = asyncio.run(create_mcp_server().call_tool("rootly_navigate", {"domain": "schedules"}))
-    assert json.loads(content[0].text)["tools"] == ["rootly_schedules_list", "rootly_schedules_get"]
+    assert json.loads(content[0].text)["tools"] == [
+        "rootly_schedules_list",
+        "rootly_schedules_get",
+        "rootly_oncalls_list",
+        "rootly_schedules_override_create",
+    ]
+
+
+@pytest.mark.parametrize(
+    "domain,tools",
+    [
+        ("postmortems", ["rootly_postmortems_list", "rootly_postmortems_get", "rootly_postmortems_update"]),
+        ("action_items", ["rootly_action_items_list", "rootly_action_items_get", "rootly_action_items_create", "rootly_action_items_update"]),
+    ],
+)
+def test_navigation_lists_the_new_domains(domain, tools):
+    content, _ = asyncio.run(create_mcp_server().call_tool("rootly_navigate", {"domain": domain}))
+    assert json.loads(content[0].text)["tools"] == tools
