@@ -11,7 +11,7 @@ Verdict: changes requested
 
 ### Fixes
 
-Fixed in commit `<FIX_SHA>` on `dev/PRD-21240`:
+Fixed in commit `13712fa` on `dev/PRD-21240`:
 
 1. [must-fix #1] Replaced every bilingual/Chinese annotation in `docs/tickets/PRD-21240.md` with
    English-only text, preserving the original meaning exactly:
