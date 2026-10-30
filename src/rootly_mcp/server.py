@@ -44,7 +44,8 @@ request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("rootly_req
 INSTRUCTIONS = (
     "Rootly is an incident management and on-call platform. This server "
     "works with one Rootly organisation: incidents, alerts, on-call "
-    "schedules, teams, severities and the API user.\n"
+    "schedules, post-mortems, action items, teams, severities and the API "
+    "user.\n"
     "Usage:\n"
     "- Every tool is listed up front; rootly_navigate / rootly_back only "
     "describe them.\n"
@@ -54,11 +55,19 @@ INSTRUCTIONS = (
     "rootly_incidents_get; rootly_incidents_resolve closes one with an "
     "optional resolution message.\n"
     "- Alerts: rootly_alerts_list(status) -> acknowledge / resolve.\n"
+    "- Post-mortems: rootly_postmortems_list(search) -> get/update (no "
+    "create; Rootly makes one automatically per incident).\n"
+    "- Action items: rootly_action_items_list(incident_id?, status, "
+    "priority) -> get/create/update; incident_id cannot combine with the "
+    "other filters.\n"
+    "- On-call: rootly_oncalls_list for who is on call now; "
+    "rootly_schedules_override_create to hand off coverage for a window.\n"
     "- Lists page with limit + page and report has_more.\n"
-    "Creating, updating, resolving or acknowledging incidents and alerts "
-    "notifies responders, and team changes affect paging: call those tools "
-    "only when the user explicitly asks. rootly_org_teams_delete is "
-    "irreversible and needs confirm=true."
+    "Creating, updating, resolving or acknowledging incidents and alerts, "
+    "writing post-mortems, action items and on-call overrides, and team "
+    "changes all affect paging or visible records: call those tools only "
+    "when the user explicitly asks. rootly_org_teams_delete is irreversible "
+    "and needs confirm=true."
 )
 
 
@@ -126,9 +135,9 @@ def create_mcp_server(settings: Settings | None = None) -> FastMCP:
 
     client_factory: Callable[[], RootlyClient | None] = get_client_from_context
 
-    from .tools import alerts, incidents, navigation, org, schedules
+    from .tools import action_items, alerts, incidents, navigation, org, postmortems, schedules
 
-    for module in (navigation, incidents, alerts, schedules, org):
+    for module in (navigation, incidents, alerts, schedules, postmortems, action_items, org):
         module.register(mcp, client_factory)
 
     return mcp

@@ -2,9 +2,10 @@
 
 An [MCP](https://modelcontextprotocol.io) server for the [Rootly](https://rootly.com) REST API
 (v1), the incident management and on-call platform. It lets an AI agent read incidents,
-alerts, on-call schedules, teams, severities and the API user and, on explicit request,
-declare, update and resolve incidents, acknowledge, resolve, create and update alerts, and
-manage teams.
+alerts, on-call schedules, post-mortems, action items, teams, severities and the API user and,
+on explicit request, declare, update and resolve incidents, acknowledge, resolve, create and
+update alerts, write and publish post-mortems, create and update action items, hand off
+on-call coverage, and manage teams.
 
 - Transport: MCP Streamable HTTP at `POST /mcp`, health probe at `GET /health`
 - Stateless and multi-tenant: the API token arrives on every request as an HTTP header and is
@@ -128,6 +129,15 @@ record returned, which `page` cannot (the rest of a cut page is on no other page
 | `rootly_alerts_update` | Change the summary, or acknowledge / resolve (**write**) | **alert_id**, status (`acknowledged`, `resolved`), summary |
 | `rootly_schedules_list` | List on-call schedules | limit, page |
 | `rootly_schedules_get` | One on-call schedule | **schedule_id** |
+| `rootly_oncalls_list` | Who is on call right now, by escalation policy | schedule_id, user_id, since, until |
+| `rootly_schedules_override_create` | Hand off on-call coverage for a window (**write**, idempotent) | **schedule_id**, **user_id**, **starts_at**, **ends_at** |
+| `rootly_postmortems_list` | List post-mortems (retrospectives) | status, search, limit, page |
+| `rootly_postmortems_get` | One post-mortem: title, status, content | **postmortem_id** |
+| `rootly_postmortems_update` | Change title, content or status (**write**) | **postmortem_id**, title, content, status (`draft`, `published`) |
+| `rootly_action_items_list` | List action items, one incident's or org-wide | incident_id, status, priority, kind, limit, page |
+| `rootly_action_items_get` | One action item | **action_item_id** |
+| `rootly_action_items_create` | Create a follow-up action item on an incident (**write**) | **incident_id**, **summary**, description, priority, due_date, assigned_to_user_id |
+| `rootly_action_items_update` | Change status, priority, description, due date or assignee (**write**) | **action_item_id**, status, priority, description, due_date, assigned_to_user_id |
 | `rootly_org_teams_list` | List teams | limit, page |
 | `rootly_org_teams_get` | One team | **team_id** |
 | `rootly_org_teams_create` | Create a team (**write**) | **name**, description, color, notify_emails, user_ids |
@@ -192,9 +202,15 @@ uv run pytest
 ## Delivery notes
 
 - **All tools always listed.** Older versions only listed the navigation tools until one was
-  called. Behind a stateless gateway that hid every other tool, so this version lists all 23
+  called. Behind a stateless gateway that hid every other tool, so this version lists all 32
   tools up front. `rootly_navigate` and `rootly_back` remain for compatibility and only
   describe the tools.
+- **Post-mortems, action items and on-call (PRD-21240).** No create tool for post-mortems:
+  Rootly creates one automatically per incident, so `rootly_postmortems_update` is the write
+  path. `rootly_action_items_list` takes `incident_id` for one incident's items (Rootly's
+  nested endpoint has no status/priority/kind filters) or omits it for an org-wide, filtered
+  search — the two cannot be combined. `rootly_oncalls_list` has no `meta`/`links` in Rootly's
+  response, unlike every other list tool here, so it is not paginated.
 - **Built on the published API reference.** Every call follows Rootly's OpenAPI document.
   Corrections compared with the older version: on-call schedules come from `/schedules`;
   incidents are updated with `PUT` and resolved through `PUT /incidents/{id}/resolve`; alerts

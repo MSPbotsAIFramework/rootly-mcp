@@ -293,6 +293,8 @@ PAGED_TOOLS = [
     ("rootly_alerts_list", "alerts", "alerts"),
     ("rootly_schedules_list", "schedules", "schedules"),
     ("rootly_org_teams_list", "teams", "teams"),
+    ("rootly_postmortems_list", "post_mortems", "post_mortems"),
+    ("rootly_action_items_list", "action_items", "action_items"),
 ]
 
 
@@ -380,6 +382,8 @@ async def test_offset_wins_over_page(monkeypatch, tool, path, key):
         ("rootly_alerts_list", "alerts", "alerts", {}),
         ("rootly_schedules_list", "schedules", "schedules", {}),
         ("rootly_org_teams_list", "teams", "teams", {"sort": "name"}),
+        ("rootly_postmortems_list", "post_mortems", "post_mortems", {}),
+        ("rootly_action_items_list", "action_items", "action_items", {}),
     ],
 )
 @pytest.mark.parametrize(

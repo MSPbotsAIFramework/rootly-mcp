@@ -35,7 +35,18 @@ DOMAINS: dict[str, tuple[str, list[str]]] = {
         "Alerts: list, acknowledge, resolve, create, update.",
         ["rootly_alerts_list", "rootly_alerts_acknowledge", "rootly_alerts_resolve", "rootly_alerts_create", "rootly_alerts_update"],
     ),
-    "schedules": ("On-call schedules: list, get.", ["rootly_schedules_list", "rootly_schedules_get"]),
+    "schedules": (
+        "On-call schedules: list, get; who is on call now (oncalls list); hand off coverage (override create).",
+        ["rootly_schedules_list", "rootly_schedules_get", "rootly_oncalls_list", "rootly_schedules_override_create"],
+    ),
+    "postmortems": (
+        "Post-mortems (retrospectives): list, get, update title/content/status.",
+        ["rootly_postmortems_list", "rootly_postmortems_get", "rootly_postmortems_update"],
+    ),
+    "action_items": (
+        "Action items: list (incident-scoped or org-wide), get, create, update.",
+        ["rootly_action_items_list", "rootly_action_items_get", "rootly_action_items_create", "rootly_action_items_update"],
+    ),
     "org": (
         "Teams (list, get, create, update, patch, delete), severities and the current user.",
         [
@@ -55,7 +66,9 @@ DOMAINS: dict[str, tuple[str, list[str]]] = {
 def register(mcp: FastMCP, client_factory: ClientFactory) -> None:
     @mcp.tool(annotations=LOCAL)
     async def rootly_navigate(
-        domain: Annotated[Literal["incidents", "alerts", "schedules", "org"], Field(description="Area to describe.")],
+        domain: Annotated[
+            Literal["incidents", "alerts", "schedules", "postmortems", "action_items", "org"], Field(description="Area to describe.")
+        ],
     ) -> str:
         """Describe the tools of one Rootly area. All tools are already callable; this changes nothing."""
         summary, tools = DOMAINS[domain]
