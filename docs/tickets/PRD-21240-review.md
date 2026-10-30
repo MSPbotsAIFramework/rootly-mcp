@@ -50,3 +50,36 @@ Gates re-run on the fixed code (synced with `main @ 5e9e0b7`, unchanged since ro
 
 No test case in `docs/tickets/PRD-21240.ac.json` was affected by this fix (language-only change to
 the ticket doc, not to the tool code or test strategy); none were re-run or re-worded.
+
+## Round 2 · 2026-10-30 · reviewed dev/PRD-21240 @ a5f922e (base main @ 5e9e0b7)
+
+Status: frozen @ a5f922e
+
+Verdict: approved
+
+### Round 1 must-fix check
+
+1. [must-fix #1, Chinese text in docs/tickets/PRD-21240.md] Fixes confirmed: `git diff d4a3672 a5f922e` touches only `docs/tickets/PRD-21240-review.md` and `docs/tickets/PRD-21240.md` (no code/test/README changes). Re-ran `grep -rnP '[\x{4e00}-\x{9fff}]' --exclude-dir=.git --exclude-dir=.venv .` on `a5f922e`: the only hits are inside this review file's own Round 1 Findings entry (the reviewer's verbatim quote of the violation, kept as evidence per the frozen-record convention), zero hits in `docs/tickets/PRD-21240.md`, `src/`, `tests/`, `README.md`. Confirmed fixed.
+
+### New diff since Round 1 (d4a3672...a5f922e)
+
+Doc-only (review record + ticket doc language fix); no application code, test, or README changes to re-review.
+
+### Independent check of the full diff (main@5e9e0b7...a5f922e)
+
+Re-reviewed the complete code diff end to end (not just the delta since Round 1), since Round 1 only reported the one documentation finding:
+
+1. `uv run pytest -q` on `a5f922e`: **295 passed, 1 skipped** (same pre-existing skip as baseline) — matches the Self-test Gates table exactly.
+2. Credentials: `src/rootly_mcp/server.py` reads `X-Rootly-Api-Token` into a per-request `contextvars.ContextVar` (`_credentials_var`); no credential is stored on any shared/module-level object — satisfies the stateless, request-scoped credential rule.
+3. Reuse: every new tool (`postmortems.py`, `action_items.py`, the two new `schedules.py` tools) is built entirely from existing `_common.py` helpers (`run_tool`, `single`, `list_page`, `body`, `resource_id`, `compact`, `enum_value`, `flatten`) and the existing `RootlyClient.get/request` — no new HTTP client, retry, or error-mapping code was added, matching the design's §4a reuse plan.
+4. Errors are structured (`invalid_argument`, `not_found`) and non-crashing, including the postmortem-locked-in-editor 409 -> `invalid_argument` with `retryable: false` mapping (`tests/test_postmortems.py::test_update_conflict_returns_structured_error_not_a_crash`).
+5. `rootly_oncalls_list` correctly deviates from `list_page` (no `meta`/`links` in Rootly's `oncalls` response) and uses `flatten()` directly instead, as called out in the design and the Self-test "Deviations" section — verified this is in fact the only place that bypasses `list_page`, for the documented reason.
+6. README Tools table and Delivery notes updated consistently with the 9 new tools (23 -> 32 total); the MSPbots Connector section is untouched by this diff and still matches `reference/readme-connector-section.md` verbatim.
+7. No DB/schema in this repo — the migration rules in `REVIEW.md` §2.5/§2.11 don't apply. No new dependencies added.
+8. `docs/tickets/PRD-21240.ac.json`: no case is `fail` or unexplained-untested; all 7 manual cases carry `"notes": "needs a real vendor account..."`, which is an explicit, allowed exemption under `mcp-track.md` §2.5/§3 (missing vendor account does not block). All 7 auto cases have a pytest command + pass count as evidence.
+
+No must-fix found. No suggestions either — the diff is small, additive, and consistent with the existing module shape.
+
+### Fixes
+
+(none needed this round)
